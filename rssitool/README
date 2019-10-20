@@ -1,1 +1,1 @@
-
+Peer-to-peer application for measuring RSSI between LoRa transmitter and buried receiver.  The spreading factor is cycled round-robin for each measurement.
