@@ -1,4 +1,5 @@
  // Feather9x_RX
+#include <stdlib.h>
 #include <SPI.h>
 #include <RH_RF95.h>
  
@@ -19,75 +20,7 @@ RH_RF95 rf95(RFM95_CS, RFM95_INT);
 //Voltage Read Pin
 #define VBATPIN A7
 
-
-
-
-///
-///This chunk of code is used to convert a float or double to a string
-///
-#include <stdlib.h>
-#include <stdio.h>
-#if 0
-char *dtostrf (double val, signed char width, unsigned char prec, char *sout) {
-  char fmt[20];
-  sprintf(fmt, "%%%d.%df", width, prec);
-  sprintf(sout, fmt, val);
-  return sout;
-}
-#else
-#include <string.h>
-#include <stdlib.h>
-char *dtostrf(double val, int width, unsigned int prec, char *sout)
-{
-  int decpt, sign, reqd, pad;
-  const char *s, *e;
-  char *p;
-  s = fcvt(val, prec, &decpt, &sign);
-  if (prec == 0 && decpt == 0) {
-  s = (*s < '5') ? "0" : "1";
-    reqd = 1;
-  } else {
-    reqd = strlen(s);
-    if (reqd > decpt) reqd++;
-    if (decpt == 0) reqd++;
-  }
-  if (sign) reqd++;
-  p = sout;
-  e = p + reqd;
-  pad = width - reqd;
-  if (pad > 0) {
-    e += pad;
-    while (pad-- > 0) *p++ = ' ';
-  }
-  if (sign) *p++ = '-';
-  if (decpt <= 0 && prec > 0) {
-    *p++ = '0';
-    *p++ = '.';
-    e++;
-    while ( decpt < 0 ) {
-      decpt++;
-      *p++ = '0';
-    }
-  }    
-  while (p < e) {
-    *p++ = *s++;
-    if (p == e) break;
-    if (--decpt == 0) *p++ = '.';
-  }
-  if (width < 0) {
-    pad = (reqd + width) * -1;
-    while (pad-- > 0) *p++ = ' ';
-  }
-  *p = 0;
-  return sout;
-}
-#endif
-///
-///This chunk of code is used to convert a float to a string
-///
-
-
-
+char *dtostrf(double val, signed char width, unsigned char prec, char *sout);
 
 int debug = 1;
 void setup()
@@ -184,4 +117,92 @@ void loop()
       //Receive failed if in this loop
     }
   }
+}
+
+// ============================================================================
+// Name        : dtostrf
+// URL         : https://github.com/stm32duino/Arduino_Core_STM32/blob/main/cores/arduino/avr/dtostrf.c
+// Author      : Cristian Maglie <c.maglie@arduino.cc>
+// Version     : commit b626ed2 on Dec 21, 2020
+// Copyright   : (c) 2013 Arduino.  All rights reserved.
+// Description : Emulation for dtostrf function from avr-libc
+// ============================================================================
+
+char *dtostrf(double val, signed char width, unsigned char prec, char *sout)
+{
+  //Commented code is the original version
+  /*char fmt[20];
+  sprintf(fmt, "%%%d.%df", width, prec);
+  sprintf(sout, fmt, val);
+  return sout;*/
+
+  // Handle negative numbers
+  uint8_t negative = 0;
+  if (val < 0.0) {
+    negative = 1;
+    val = -val;
+  }
+
+  // Round correctly so that print(1.999, 2) prints as "2.00"
+  double rounding = 0.5;
+  for (int i = 0; i < prec; ++i) {
+    rounding /= 10.0;
+  }
+
+  val += rounding;
+
+  // Extract the integer part of the number
+  unsigned long int_part = (unsigned long)val;
+  double remainder = val - (double)int_part;
+
+  if (prec > 0) {
+    // Extract digits from the remainder
+    unsigned long dec_part = 0;
+    double decade = 1.0;
+    for (int i = 0; i < prec; i++) {
+      decade *= 10.0;
+    }
+    remainder *= decade;
+    dec_part = (int)remainder;
+
+    if (negative) {
+      sprintf(sout, "-%ld.%0*ld", int_part, prec, dec_part);
+    } else {
+      sprintf(sout, "%ld.%0*ld", int_part, prec, dec_part);
+    }
+  } else {
+    if (negative) {
+      sprintf(sout, "-%ld", int_part);
+    } else {
+      sprintf(sout, "%ld", int_part);
+    }
+  }
+  // Handle minimum field width of the output string
+  // width is signed value, negative for left adjustment.
+  // Range -128,127
+  char fmt[129] = "";
+  unsigned int w = width;
+  if (width < 0) {
+    negative = 1;
+    w = -width;
+  } else {
+    negative = 0;
+  }
+
+  if (strlen(sout) < w) {
+    memset(fmt, ' ', 128);
+    fmt[w - strlen(sout)] = '\0';
+    if (negative == 0) {
+      char *tmp = (char *)malloc(strlen(sout) + 1);
+      strcpy(tmp, sout);
+      strcpy(sout, fmt);
+      strcat(sout, tmp);
+      free(tmp);
+    } else {
+      // left adjustment
+      strcat(sout, fmt);
+    }
+  }
+
+  return sout;
 }
